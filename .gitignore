@@ -1,0 +1,15 @@
+node_modules/
+.env
+cache/
+artifacts/
+typechain-types/
+coverage/
+coverage.json
+deployments/
+jobs.json
+agents.json
+*.log
+*.err
+dist/
+build/
+models/

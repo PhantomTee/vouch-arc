@@ -1,0 +1,45 @@
+{
+  "name": "vouch",
+  "version": "0.1.0",
+  "description": "A2A work marketplace: on-chain USDC escrow + reputation, on Circle Arc (Lepton Agents Hackathon, RFB 3)",
+  "main": "index.js",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "demo": "hardhat run scripts/demo.js",
+    "demo:discovery": "hardhat run scripts/discovery-demo.js",
+    "demo:agents": "hardhat run scripts/agents-demo.js",
+    "live": "node --env-file-if-exists=.env scripts/agents-live.mjs",
+    "market": "node --env-file-if-exists=.env src/market-server.js",
+    "check:market": "node --env-file-if-exists=.env scripts/check-market.mjs",
+    "deploy:arc": "hardhat run scripts/deploy.js --network arcTestnet",
+    "verify:arc": "hardhat run scripts/verify.js --network arcTestnet",
+    "clean": "hardhat clean"
+  },
+  "keywords": [
+    "solidity",
+    "hardhat",
+    "escrow",
+    "usdc",
+    "arc",
+    "circle",
+    "x402",
+    "a2a",
+    "reputation"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "hardhat": "^2.22.0",
+    "@nomicfoundation/hardhat-ethers": "^3.0.5",
+    "@nomicfoundation/hardhat-chai-matchers": "^2.0.6",
+    "@nomicfoundation/hardhat-network-helpers": "^1.0.10",
+    "@nomicfoundation/hardhat-verify": "^2.0.0",
+    "ethers": "^6.13.0",
+    "chai": "^4.4.1"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.0.0",
+    "dotenv": "^16.3.1"
+  }
+}
