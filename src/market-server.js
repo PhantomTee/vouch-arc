@@ -99,18 +99,32 @@ async function readEscrows() {
   return out;
 }
 
+let settleCache = { at: 0, data: { paid: new Map(), disputed: new Set() } };
+async function settlements() {
+  if (Date.now() - settleCache.at < 8000) return settleCache.data;
+  try {
+    settleCache = { at: Date.now(), data: await market.scanSettlements() };
+  } catch {}
+  return settleCache.data;
+}
+
 async function buildState() {
-  const escrows = await readEscrows();
+  const [escrows, classed] = await Promise.all([readEscrows(), settlements()]);
+  // A resolved dispute lands in Status.Settled (getEscrow.disputed === false), so we
+  // classify each escrow by its terminal event: paid (Released) vs disputed.
   const feed = escrows.map((e) => {
-    const m = jobMeta[String(e.id)] || {};
+    const id = Number(e.id);
+    const m = jobMeta[String(id)] || {};
+    const isPaid = classed.paid.has(id);
+    const isDisputed = classed.disputed.has(id) || (e.disputed && !e.completed);
     return {
-      id: Number(e.id),
+      id,
       client: e.client,
       provider: e.provider,
       providerName: byAddr.get(e.provider.toLowerCase())?.name ?? m.providerName ?? null,
       amountUsdc: e.amountUsdc,
-      completed: e.completed,
-      disputed: e.disputed,
+      completed: isPaid, // "paid to worker" — drives the green "paid" tag
+      disputed: isDisputed,
       title: m.title ?? null,
       kind: m.kind ?? null,
       txHash: m.txHash ?? null,
@@ -119,15 +133,15 @@ async function buildState() {
 
   const reputations = await Promise.all(roster.map((r) => market.reputationScore(r.address).catch(() => 0)));
   const agents = roster.map((r, i) => {
-    const paid = feed.filter((f) => f.provider.toLowerCase() === r.address.toLowerCase() && f.completed && !f.disputed);
-    const earned = paid.reduce((s, f) => s + Number(f.amountUsdc), 0);
+    const mine = feed.filter((f) => f.provider.toLowerCase() === r.address.toLowerCase() && f.completed);
+    const earned = mine.reduce((s, f) => s + (Number(classed.paid.get(f.id)) || 0), 0);
     return {
       name: r.name, address: r.address, skill: r.skill, priceUsdc: r.priceUsdc,
-      reputation: reputations[i], completed: paid.length, earnedUsdc: Number(earned.toFixed(6)),
+      reputation: reputations[i], completed: mine.length, earnedUsdc: Number(earned.toFixed(6)),
     };
   });
 
-  const settled = feed.filter((f) => f.completed && !f.disputed).length;
+  const settled = feed.filter((f) => f.completed).length;
   const disputes = feed.filter((f) => f.disputed).length;
   const escrowedUsdc = Number(feed.reduce((s, f) => s + Number(f.amountUsdc), 0).toFixed(6));
   return { escrow: market.address, agents, feed, summary: { settled, disputes, escrowedUsdc, jobs: feed.length } };

@@ -186,4 +186,39 @@ export class Market {
   async usdcBalance(addr) {
     return ethers.formatUnits(await this.usdc.balanceOf(addr), 6);
   }
+
+  // Classify each escrow by its terminal EVENT (not the flattened status flag):
+  //   Released  → worker was paid          → { paid: id -> amount }
+  //   Arbitrated/Disputed → went to dispute → { disputed: Set<id> }
+  // This is how the UI distinguishes a paid job from a resolved dispute, since a
+  // resolved dispute lands in Status.Settled (so getEscrow's `disputed` is false).
+  async scanSettlements() {
+    const paid = new Map();
+    const disputed = new Set();
+    // The RPC caps getLogs at ~9000 blocks, so we scan in chunks back from latest.
+    const CHUNK = 9000;
+    const CHUNKS = 6; // ~54k blocks ≈ enough to cover a freshly-deployed contract
+    let latest;
+    try {
+      latest = await this._read(() => this.provider.getBlockNumber(), 3);
+    } catch {
+      return { paid, disputed };
+    }
+    for (let i = 0; i < CHUNKS; i++) {
+      const to = latest - i * CHUNK;
+      const from = Math.max(0, to - CHUNK + 1);
+      try {
+        const rel = await this._read(() => this.read.queryFilter(this.read.filters.Released(), from, to), 2);
+        for (const ev of rel) paid.set(Number(ev.args.id), ethers.formatUnits(ev.args.paid, 6));
+      } catch {}
+      for (const name of ["Arbitrated", "Disputed"]) {
+        try {
+          const evs = await this._read(() => this.read.queryFilter(this.read.filters[name](), from, to), 2);
+          for (const ev of evs) disputed.add(Number(ev.args.id));
+        } catch {}
+      }
+      if (from === 0) break;
+    }
+    return { paid, disputed };
+  }
 }
