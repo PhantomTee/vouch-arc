@@ -121,6 +121,19 @@ async function settlements() {
   return settleCache.data;
 }
 
+// Live remote workers currently running + registered with the coordinator (if set).
+const COORDINATOR_URL = process.env.COORDINATOR_URL;
+let coordCache = { at: 0, cards: [] };
+async function coordinatorWorkers() {
+  if (!COORDINATOR_URL) return [];
+  if (Date.now() - coordCache.at < 5000) return coordCache.cards;
+  try {
+    const r = await fetch(`${COORDINATOR_URL}/workers`, { signal: AbortSignal.timeout(3000) }).then((x) => x.json());
+    coordCache = { at: Date.now(), cards: r.workers || [] };
+  } catch {}
+  return coordCache.cards;
+}
+
 async function buildState() {
   const [escrows, classed] = await Promise.all([readEscrows(), settlements()]);
   // A resolved dispute lands in Status.Settled (getEscrow.disputed === false), so we
@@ -153,6 +166,28 @@ async function buildState() {
       reputation: reputations[i], completed: mine.length, earnedUsdc: Number(earned.toFixed(6)),
     };
   });
+
+  // Merge in workers currently running + registered with the coordinator: flag
+  // roster workers that are online, and surface live-only workers not yet on chain.
+  const live = await coordinatorWorkers();
+  const onlineAddrs = new Set(live.map((c) => c.provider.address.toLowerCase()));
+  for (const a of agents) a.online = onlineAddrs.has(a.address.toLowerCase());
+  const known = new Set(agents.map((a) => a.address.toLowerCase()));
+  for (const c of live) {
+    const addr = c.provider.address;
+    if (known.has(addr.toLowerCase())) continue;
+    const rep = await market.reputationScore(addr).catch(() => 0);
+    agents.push({
+      name: c.name,
+      address: addr,
+      skill: c.skills?.[0]?.id ?? "code",
+      priceUsdc: Number(c.x402?.accepts?.[0]?.maxAmountRequired ?? 0) / 1_000_000,
+      reputation: rep,
+      completed: 0,
+      earnedUsdc: 0,
+      online: true,
+    });
+  }
 
   // Live activity ticker: newest first → "hired / paid / slashed".
   const activity = feed

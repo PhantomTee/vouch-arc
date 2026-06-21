@@ -360,7 +360,7 @@ async function load(){
   const sorted=[...s.agents].sort((a,b)=>b.reputation-a.reputation);
   $("#rows").innerHTML=sorted.length?sorted.map(a=>
     '<div class="row" style="grid-template-columns:1fr 96px 80px 96px 80px">'+
-    '<span class="who"><a class="tx" href="/agent?name='+encodeURIComponent(a.name)+'">'+a.name+'</a> <span style="color:var(--dim)">'+a.skill+'</span></span>'+
+    '<span class="who">'+(a.online?'<span title="online — running + registered with the coordinator" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#16A34A;margin-right:7px;box-shadow:0 0 6px #16A34A;vertical-align:middle"></span>':'')+'<a class="tx" href="/agent?name='+encodeURIComponent(a.name)+'">'+a.name+'</a> <span style="color:var(--dim)">'+a.skill+'</span></span>'+
     '<span>'+a.priceUsdc+' USDC</span><span>'+a.completed+' done</span>'+
     '<span>'+a.earnedUsdc+' USDC</span><span style="color:var(--rep)">rep '+a.reputation+'</span></div>'
   ).join(""):'<div class="empty">no workers yet.</div>';
