@@ -1,0 +1,85 @@
+:root{
+  --bg:#0A0F0E;--panel:#0E1413;--raised:#121A18;--window:#080C0B;--rule:#1E2A27;
+  --ink:#E8F0EC;--dim:#7C918A;--ok:#3FE0A8;--ok-soft:rgba(63,224,168,.16);--rep:#A78BFA;--bad:#FF5C49;
+  --mono:var(--font-mono),'IBM Plex Mono',ui-monospace,Consolas,monospace;
+  --disp:var(--font-disp),'Space Grotesk',system-ui,-apple-system,sans-serif;
+}
+*{box-sizing:border-box}html,body{margin:0}
+body{background:radial-gradient(120% 70% at 50% -10%,#0f1f1b 0%,var(--bg) 55%);color:var(--ink);
+  font-family:var(--disp);-webkit-font-smoothing:antialiased;line-height:1.5;min-height:100vh}
+a{color:inherit;text-decoration:none}
+.wrap{max-width:960px;margin:0 auto;padding:0 24px}
+
+/* nav */
+nav{border-bottom:1px solid var(--rule);position:sticky;top:0;background:rgba(10,15,14,.82);backdrop-filter:blur(8px);z-index:10}
+.nav-in{max-width:960px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+nav .mark{font-family:var(--mono);font-weight:600;letter-spacing:.3em;font-size:13px}
+nav .links{display:flex;gap:4px;flex-wrap:wrap}
+nav .links a{font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);padding:7px 11px;border-radius:8px}
+nav .links a:hover{color:var(--ink)}
+nav .links a.on{color:var(--ok);background:var(--ok-soft)}
+nav .dl{font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:500;color:#04140f;background:linear-gradient(95deg,var(--ok),#7ef0cb);border-radius:9px;padding:9px 16px}
+
+/* hero + headings */
+.hero{padding:60px 0 14px}.hero.center{text-align:center}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.34em;color:var(--ok);text-transform:uppercase}
+h1{font-size:clamp(34px,6.5vw,62px);line-height:1.03;letter-spacing:-.02em;margin:16px 0 0;max-width:18ch;font-weight:700}
+.hero.center h1{margin-left:auto;margin-right:auto}
+h1 .g{background:linear-gradient(95deg,var(--ok),#9af5d6 45%,var(--rep));-webkit-background-clip:text;background-clip:text;color:transparent}
+h2{font-size:clamp(22px,3vw,30px);letter-spacing:-.01em;margin:54px 0 0;font-weight:600}
+.sub{font-family:var(--mono);color:var(--dim);font-size:15px;max-width:58ch;margin:20px 0 0;line-height:1.7}
+.hero.center .sub{margin-left:auto;margin-right:auto}
+p.body{font-family:var(--mono);color:var(--dim);font-size:14px;line-height:1.75;max-width:64ch;margin:14px 0 0}
+p.body b{color:var(--ink);font-weight:500}p.body .rep{color:var(--rep)}
+
+/* buttons */
+.cta{margin-top:30px;display:flex;gap:14px;flex-wrap:wrap}
+.hero.center .cta{justify-content:center}
+.btn{font-family:var(--mono);font-size:13px;letter-spacing:.1em;text-transform:uppercase;font-weight:500;color:#04140f;background:linear-gradient(95deg,var(--ok),#7ef0cb);border:0;border-radius:12px;padding:15px 26px;cursor:pointer;transition:box-shadow .3s}
+.btn:hover{box-shadow:0 0 32px var(--ok-soft)}
+.ghost{font-family:var(--mono);font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);border:1px solid var(--rule);border-radius:12px;padding:15px 22px}
+.ghost:hover{color:var(--ink);border-color:var(--ok)}
+
+/* cards / steps grid */
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:24px}
+.card{background:var(--raised);border:1px solid var(--rule);border-radius:14px;padding:22px;display:block;color:inherit}
+a.card:hover{border-color:var(--ok)}
+.card .n{font-family:var(--mono);font-size:12px;color:var(--ok);letter-spacing:.2em}
+.card h3{font-size:17px;margin:12px 0 6px;font-weight:600}
+.card p{font-family:var(--mono);font-size:12.5px;color:var(--dim);line-height:1.65;margin:0}
+.card .more{font-family:var(--mono);font-size:11px;color:var(--ok);letter-spacing:.08em;margin-top:12px;display:inline-block}
+.card code,.body code,.flow code{color:var(--ink);background:#0c1512;padding:1px 6px;border-radius:5px;font-family:var(--mono)}
+
+/* code block */
+pre{background:var(--window);border:1px solid #16201d;border-radius:12px;padding:18px 20px;overflow:auto;margin-top:18px}
+pre code{font-family:var(--mono);font-size:13px;color:var(--ink);background:none;padding:0;line-height:1.7;white-space:pre}
+.cmt{color:var(--dim)}
+
+/* flow rail */
+.flow{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:8px;align-items:center;margin-top:26px}
+.flow .node{background:var(--raised);border:1px solid var(--rule);border-radius:13px;padding:18px;text-align:center}
+.flow .node .t{font-family:var(--mono);font-size:13px;color:var(--ok);font-weight:600}
+.flow .node .d{font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:6px;line-height:1.5}
+.flow .arrow{color:var(--dim);text-align:center}
+
+/* stat strip */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:26px}
+.stat{background:linear-gradient(180deg,var(--panel),#0b110f);border:1px solid var(--rule);border-radius:13px;padding:20px}
+.stat .v{font-family:var(--mono);font-weight:600;font-size:34px;color:var(--ok);font-variant-numeric:tabular-nums}
+.stat .v.rep{color:var(--rep)}
+.stat .k{font-family:var(--mono);font-size:11px;letter-spacing:.18em;color:var(--dim);text-transform:uppercase;margin-top:8px}
+
+/* reputation table */
+table{width:100%;border-collapse:collapse;margin-top:22px;font-family:var(--mono);font-size:12.5px}
+th,td{text-align:left;padding:11px 12px;border-bottom:1px solid var(--rule)}
+th{color:var(--dim);font-weight:500;letter-spacing:.08em;text-transform:uppercase;font-size:11px}
+td{color:var(--dim)}td.f{color:var(--ink)}
+td .pos{color:var(--ok)}td .neg{color:var(--bad)}
+.badge{font-family:var(--mono);font-size:11px;border-radius:999px;padding:3px 10px;border:1px solid var(--rule)}
+.badge.up{color:var(--ok);border-color:rgba(63,224,168,.4)}
+.badge.down{color:var(--bad);border-color:rgba(255,92,73,.4)}
+
+footer{margin-top:60px;padding:24px 0 50px;border-top:1px solid var(--rule);font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.06em}
+footer a{color:var(--dim)}footer a:hover{color:var(--ok)}
+
+@media(max-width:680px){.flow{grid-template-columns:1fr}.flow .arrow{display:none}.grid3,.stats{grid-template-columns:1fr}nav .links{display:none}}
