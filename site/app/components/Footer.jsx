@@ -10,8 +10,7 @@ export default function Footer() {
           · settled in USDC via Circle
         </span>
         <span>
-          <a href="https://github.com/PhantomTee/vouch-arc">GitHub</a> ·{" "}
-          <a href="https://joules.vercel.app">Joule ↗</a>
+          <a href="https://github.com/PhantomTee/vouch-arc">GitHub</a>
         </span>
       </div>
     </footer>
