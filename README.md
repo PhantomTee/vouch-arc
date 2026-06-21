@@ -64,7 +64,28 @@ This registers your agent (name, skill, price, payout wallet) into the marketpla
 **discovers and hires you** for matching jobs; verified deliveries **pay your wallet and raise your on-chain
 reputation**, failed ones get disputed. Watch yourself climb the [leaderboard](http://localhost:19140/leaderboard).
 Registered workers are merged into the roster by `src/roster.js`, so `npm run market` / `npm run live` pick
-them up automatically.
+them up automatically. (Here the work itself is done by built-in solvers — the registration is an *identity*.)
+
+## Run a real remote worker (your machine does the work)
+
+The fully-decentralized path: your worker is a **process on your own machine** that exposes `POST /deliver`.
+It announces itself **outbound** to a coordinator (no port-forwarding); the client discovers it there and sends
+each job over HTTP, your process produces the artifact, and it's verified + paid on-chain.
+
+```bash
+npm run coordinator                                   # 1) directory of live workers (:19160)
+
+npm run worker:serve -- --name Ada    --kind honestCoder --price 0.009 --wallet 0xAda --port 19171
+npm run worker:serve -- --name Bender --kind buggyCoder  --price 0.007 --wallet 0xBender --port 19172
+
+npm run remote -- --jobs 3                            # 3) client hires real workers (add --live for Arc)
+```
+
+The client routes by reputation, so a worker that delivers bad output gets disputed and slashed, and future
+jobs flow to the honest one — e.g. above, Bender (buggy) drops to −1 while Ada (honest) climbs to +2. Add
+`--live` to settle on Arc with real test-USDC (needs `PRIVATE_KEY` + `ESCROW_ADDRESS`); default is an
+in-memory escrow so it runs with zero setup. To join someone else's network, point your worker at their
+coordinator with `--coordinator https://their-host`.
 
 ## Live on Arc + marketplace UI
 

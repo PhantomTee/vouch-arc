@@ -43,6 +43,31 @@ export class WorkerAgent {
   }
 }
 
+// A worker running as a separate process on its own machine. `deliver` sends the
+// job to that machine over HTTP and returns the real artifact it produces — this
+// is the genuinely-decentralized path (vs WorkerAgent, which solves in-process).
+export class RemoteWorker {
+  constructor({ name, address, skill, priceUsdc, url, timeoutMs = 15_000 }) {
+    this.name = name;
+    this.address = address;
+    this.skill = skill;
+    this.priceUsdc = priceUsdc;
+    this.url = url;
+    this.timeoutMs = timeoutMs;
+  }
+
+  async deliver(job) {
+    const res = await fetch(`${this.url}/deliver`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ job }),
+      signal: AbortSignal.timeout(this.timeoutMs),
+    });
+    if (!res.ok) throw new Error(`worker responded ${res.status}`);
+    return res.json();
+  }
+}
+
 export class ClientAgent {
   /**
    * @param {object} p
@@ -70,7 +95,17 @@ export class ClientAgent {
     this.log(`  job "${job.title}" → discovered ${best.card.name} (rep ${best.reputation}, ${best.priceUsdc} USDC)`);
 
     const id = await this.escrow.createEscrow(best.address, best.priceUsdc, deadlineSecs);
-    const delivery = worker.deliver(job);
+
+    let delivery;
+    try {
+      delivery = await worker.deliver(job); // in-process or over HTTP (RemoteWorker)
+    } catch (err) {
+      await this.escrow.raiseDispute(id);
+      await this.escrow.resolveDispute(id, false); // no delivery → provider slashed
+      this.log(`    ✗ ${best.card.name} failed to deliver (${err.message}) → dispute upheld, reputation--`);
+      return { ok: false, provider: best.card.name, address: best.address, id, disputed: true, reasons: ["no_delivery"] };
+    }
+
     const result = verify(job, delivery);
 
     if (result.passed) {

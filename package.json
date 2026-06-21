@@ -15,7 +15,10 @@
     "deploy:arc": "hardhat run scripts/deploy.js --network arcTestnet",
     "verify:arc": "hardhat run scripts/verify.js --network arcTestnet",
     "clean": "hardhat clean",
-    "worker": "node scripts/register-worker.mjs"
+    "worker": "node scripts/register-worker.mjs",
+    "coordinator": "node src/coordinator.js",
+    "worker:serve": "node src/worker-node.js",
+    "remote": "node --env-file-if-exists=.env scripts/agents-remote.mjs"
   },
   "keywords": [
     "solidity",
