@@ -7,11 +7,12 @@ import http from "node:http";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { ethers } from "ethers";
 import { Market } from "./chain.js";
 import { WorkerAgent, ClientAgent, solvers } from "./agents.js";
 import { AgentRegistry } from "./registry.js";
-import { loadRoster } from "./roster.js";
-import { boardPage, leaderboardPage, feedPage, agentPage } from "./pages.js";
+import { loadRoster, registerWorker } from "./roster.js";
+import { boardPage, leaderboardPage, feedPage, agentPage, workersPage } from "./pages.js";
 
 const PORT = Number(process.env.MARKET_PORT || 19140);
 if (!process.env.PRIVATE_KEY || !process.env.ESCROW_ADDRESS) {
@@ -24,17 +25,29 @@ const jobsFile = join(root, "jobs.json");
 const jobMeta = existsSync(jobsFile) ? JSON.parse(readFileSync(jobsFile, "utf8")) : {};
 const saveJobs = () => writeFileSync(jobsFile, JSON.stringify(jobMeta, null, 2));
 
-const roster = loadRoster();
-const byAddr = new Map(roster.map((r) => [r.address.toLowerCase(), r]));
-const workers = roster.map(
-  (r) => new WorkerAgent({ name: r.name, address: r.address, skill: r.skill, priceUsdc: r.priceUsdc, solve: solvers[r.kind] }),
-);
-const workerMap = new Map(workers.map((w) => [w.address, w]));
-
 const market = new Market({ clientKey: process.env.PRIVATE_KEY, escrowAddress: process.env.ESCROW_ADDRESS });
-const registry = new AgentRegistry({ reputationOf: (a) => market.reputationScore(a) });
-for (const w of workers) registry.register(w.card());
-const client = new ClientAgent({ registry, escrow: market, workers: workerMap });
+
+// Rebuildable so a worker registered via the UI is hireable without a restart.
+let roster, byAddr, workers, workerMap, registry, client;
+function buildWorkers() {
+  roster = loadRoster();
+  byAddr = new Map(roster.map((r) => [r.address.toLowerCase(), r]));
+  workers = roster.map(
+    (r) =>
+      new WorkerAgent({
+        name: r.name,
+        address: r.address,
+        skill: r.skill,
+        priceUsdc: r.priceUsdc,
+        solve: solvers[r.kind] || (r.skill === "inference" ? solvers.honestInference : solvers.honestCoder),
+      }),
+  );
+  workerMap = new Map(workers.map((w) => [w.address, w]));
+  registry = new AgentRegistry({ reputationOf: (a) => market.reputationScore(a) });
+  for (const w of workers) registry.register(w.card());
+  client = new ClientAgent({ registry, escrow: market, workers: workerMap });
+}
+buildWorkers();
 
 const codeJob = { title: "implement add(a,b)", kind: "code", spec: { cases: [{ args: [2, 3], expected: 5 }, { args: [4, 4], expected: 8 }] } };
 const inferenceJob = () => ({
@@ -115,8 +128,8 @@ async function buildState() {
   const feed = escrows.map((e) => {
     const id = Number(e.id);
     const m = jobMeta[String(id)] || {};
-    const isPaid = classed.paid.has(id);
-    const isDisputed = classed.disputed.has(id) || (e.disputed && !e.completed);
+    const isPaid = classed.paid.has(id) || m.outcome === "paid";
+    const isDisputed = (classed.disputed.has(id) || (e.disputed && !e.completed) || m.outcome === "disputed") && !isPaid;
     return {
       id,
       client: e.client,
@@ -141,10 +154,36 @@ async function buildState() {
     };
   });
 
+  // Live activity ticker: newest first → "hired / paid / slashed".
+  const activity = feed
+    .slice()
+    .sort((a, b) => b.id - a.id)
+    .map((f) => {
+      const who = f.providerName || short(f.provider);
+      if (f.disputed) return { kind: "slashed", text: `${who} slashed · lost dispute`, id: f.id };
+      if (f.completed) return { kind: "paid", text: `${who} hired · paid ${f.amountUsdc} USDC`, id: f.id };
+      return { kind: "hired", text: `${who} hired · ${f.amountUsdc} USDC escrowed`, id: f.id };
+    });
+
   const settled = feed.filter((f) => f.completed).length;
   const disputes = feed.filter((f) => f.disputed).length;
   const escrowedUsdc = Number(feed.reduce((s, f) => s + Number(f.amountUsdc), 0).toFixed(6));
-  return { escrow: market.address, agents, feed, summary: { settled, disputes, escrowedUsdc, jobs: feed.length } };
+  return { escrow: market.address, agents, feed, activity, summary: { settled, disputes, escrowedUsdc, jobs: feed.length } };
+}
+
+const short = (a) => (a && a.length > 12 ? a.slice(0, 6) + "…" + a.slice(-4) : a || "—");
+function readBody(req) {
+  return new Promise((resolve) => {
+    let d = "";
+    req.on("data", (c) => (d += c));
+    req.on("end", () => {
+      try {
+        resolve(JSON.parse(d || "{}"));
+      } catch {
+        resolve({});
+      }
+    });
+  });
 }
 
 function html(res, body) {
@@ -163,9 +202,24 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && p === "/") return html(res, boardPage());
     if (req.method === "GET" && p === "/leaderboard") return html(res, leaderboardPage());
     if (req.method === "GET" && p === "/feed") return html(res, feedPage());
+    if (req.method === "GET" && p === "/workers") return html(res, workersPage());
     if (req.method === "GET" && p === "/agent") return html(res, agentPage(url.searchParams.get("name") || ""));
     if (req.method === "GET" && p === "/api/state") return json(res, 200, await buildState());
     if (req.method === "POST" && p === "/api/run") return json(res, 200, await runJob());
+    if (req.method === "POST" && p === "/api/register-worker") {
+      const body = await readBody(req);
+      const name = String(body.name || "").trim();
+      const skill = body.skill === "inference" ? "inference" : "code";
+      const price = Number(body.price);
+      const wallet = String(body.wallet || "").trim();
+      if (!name) return json(res, 400, { error: "Name is required." });
+      if (!ethers.isAddress(wallet)) return json(res, 400, { error: "Enter a valid Arc wallet address (0x…)." });
+      if (!(price > 0)) return json(res, 400, { error: "Price must be greater than 0." });
+      const kind = skill === "inference" ? "honestInference" : "honestCoder";
+      registerWorker({ name, address: wallet, skill, priceUsdc: price, kind, bio: "registered via UI" });
+      buildWorkers();
+      return json(res, 200, { ok: true, name });
+    }
     json(res, 404, { error: "not_found" });
   } catch (e) {
     json(res, 500, { error: e.message });

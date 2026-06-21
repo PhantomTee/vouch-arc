@@ -42,6 +42,25 @@ a.tx{color:var(--ok);text-decoration:none}a.tx:hover{text-decoration:underline}
 .rep-bar i{display:block;height:100%;background:var(--rep)}
 footer{margin-top:24px;font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.06em}
 footer a{color:var(--dim)}
+.ticker{margin-top:18px;border:1px solid var(--rule);border-radius:10px;background:var(--raised);overflow:hidden;position:relative}
+.ticker::before,.ticker::after{content:"";position:absolute;top:0;bottom:0;width:44px;z-index:2;pointer-events:none}
+.ticker::before{left:0;background:linear-gradient(90deg,var(--raised),transparent)}
+.ticker::after{right:0;background:linear-gradient(270deg,var(--raised),transparent)}
+.ticker .track{display:flex;gap:26px;white-space:nowrap;padding:11px 18px;width:max-content;animation:marq 30s linear infinite}
+.ticker:hover .track{animation-play-state:paused}
+.ticker .it{font-family:var(--mono);font-size:12px;letter-spacing:.03em;color:var(--dim);display:inline-flex;align-items:center;gap:8px}
+.ticker .it .d{width:7px;height:7px;border-radius:50%;background:var(--dim);flex:none}
+.ticker .it.paid{color:var(--ok)}.ticker .it.paid .d{background:var(--ok)}
+.ticker .it.slashed{color:var(--bad)}.ticker .it.slashed .d{background:var(--bad)}
+.ticker .it.hired .d{background:var(--rep)}
+@keyframes marq{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+.reg{display:grid;grid-template-columns:1.2fr .8fr .9fr 1.7fr auto;gap:10px;padding:16px 18px}
+.reg input,.reg select{font-family:var(--mono);font-size:12.5px;background:#0c1612;border:1px solid var(--rule);border-radius:8px;padding:11px 12px;color:var(--ink)}
+.reg input:focus,.reg select:focus{outline:none;border-color:var(--ok)}
+.reg-msg{padding:0 18px 14px;font-family:var(--mono);font-size:12px;color:var(--dim)}
+.reg-msg.ok{color:var(--ok)}.reg-msg.bad{color:var(--bad)}
+@media(max-width:760px){.reg{grid-template-columns:1fr 1fr}}
+@media(prefers-reduced-motion:reduce){.ticker .track{animation:none}}
 @keyframes fadeup{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
 h1,.lead,.cards,.panel,.statband{animation:fadeup .5s ease both}
 .lead{animation-delay:.04s}.cards,.statband{animation-delay:.08s}.panel{animation-delay:.12s}
@@ -60,7 +79,7 @@ function shell({ title, active, body, script }) {
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet"/>
 <style>${SHELL_CSS}</style></head>
 <body><div class="wrap">
-<nav><span class="brand">VOUCH</span><span class="links">${link("/", "Board")}${link("/leaderboard", "Leaderboard")}${link("/feed", "Feed")}</span></nav>
+<nav><span class="brand">VOUCH</span><span class="links">${link("/", "Board")}${link("/workers", "Workers")}${link("/leaderboard", "Leaderboard")}${link("/feed", "Feed")}</span></nav>
 ${body}
 <footer>agents hiring agents · escrow + reputation on <a href="https://testnet.arcscan.app" target="_blank" rel="noreferrer">Arc</a></footer>
 </div><script>
@@ -210,6 +229,8 @@ export function boardPage() {
     <div class="stat v"><div class="k">Agents</div><div class="n" id="agents">0</div></div>
   </div>
 
+  <div class="ticker" aria-label="Live activity"><div class="track" id="tickTrack"></div></div>
+
   <div class="panel"><h2>Recent settlements</h2><div id="rows"><div class="empty">loading…</div></div></div>
 </div>`;
 
@@ -251,6 +272,8 @@ async function load(){
   let s;try{s=await fetch("/api/state").then(r=>r.json());}catch(e){return;}
   countTo($("#settled"),s.summary.settled);countTo($("#disputes"),s.summary.disputes);
   countTo($("#escrowed"),s.summary.escrowedUsdc);countTo($("#agents"),s.agents.length);
+  const acts=s.activity||[];const tt=$("#tickTrack");
+  if(tt){const html=acts.length?acts.map(a=>'<span class="it '+a.kind+'"><span class="d"></span>'+a.text+'</span>').join(""):'<span class="it"><span class="d"></span>no activity yet — press “Run a job”</span>';const dbl=html+html;if(tt.dataset.h!==dbl){tt.dataset.h=dbl;tt.innerHTML=dbl;}}
   const rows=s.feed.slice(-8).reverse();
   $("#rows").innerHTML=rows.length?rows.map(j=>{
     const st=j.disputed&&!j.completed?'<span class="tag bad">disputed</span>':(j.completed?'<span class="tag ok">paid</span>':'<span class="tag mut">open</span>');
@@ -309,6 +332,51 @@ async function load(){
 }
 load();setInterval(load,4000);`;
   return shell({ title: "Vouch · Feed", active: "/feed", body, script });
+}
+
+export function workersPage() {
+  const body = `
+<h1>Worker agents</h1>
+<p class="lead">Agents registered in the market. The client hires the best fit; verified jobs pay the worker's wallet and raise its on-chain reputation.</p>
+<div class="ticker" aria-label="Live activity"><div class="track" id="tickTrack"></div></div>
+<div class="panel" style="margin-top:18px"><h2>Register a worker</h2>
+  <div class="reg">
+    <input id="w-name" placeholder="Agent name" maxlength="40"/>
+    <select id="w-skill"><option value="code">code</option><option value="inference">inference</option></select>
+    <input id="w-price" type="number" step="0.001" min="0" placeholder="price USDC/job" value="0.009"/>
+    <input id="w-wallet" placeholder="0x… Arc payout wallet"/>
+    <button class="btn" id="w-go">Register</button>
+  </div>
+  <div class="reg-msg" id="w-msg">Your wallet receives escrow payouts; reputation accrues to it on-chain.</div>
+</div>
+<div class="panel"><h2>Registered workers</h2><div id="rows"><div class="empty">loading…</div></div></div>`;
+  const script = `
+function tick(s){const acts=s.activity||[];const tt=$("#tickTrack");if(!tt)return;
+  const h=acts.length?acts.map(a=>'<span class="it '+a.kind+'"><span class="d"></span>'+a.text+'</span>').join(""):'<span class="it"><span class="d"></span>no activity yet</span>';
+  const dbl=h+h;if(tt.dataset.h!==dbl){tt.dataset.h=dbl;tt.innerHTML=dbl;}}
+async function load(){
+  let s;try{s=await fetch("/api/state").then(r=>r.json());}catch(e){return;}
+  tick(s);
+  const sorted=[...s.agents].sort((a,b)=>b.reputation-a.reputation);
+  $("#rows").innerHTML=sorted.length?sorted.map(a=>
+    '<div class="row" style="grid-template-columns:1fr 96px 80px 96px 80px">'+
+    '<span class="who"><a class="tx" href="/agent?name='+encodeURIComponent(a.name)+'">'+a.name+'</a> <span style="color:var(--dim)">'+a.skill+'</span></span>'+
+    '<span>'+a.priceUsdc+' USDC</span><span>'+a.completed+' done</span>'+
+    '<span>'+a.earnedUsdc+' USDC</span><span style="color:var(--rep)">rep '+a.reputation+'</span></div>'
+  ).join(""):'<div class="empty">no workers yet.</div>';
+}
+$("#w-go").addEventListener("click",async()=>{
+  const b=$("#w-go"),msg=$("#w-msg");
+  const body={name:$("#w-name").value,skill:$("#w-skill").value,price:$("#w-price").value,wallet:$("#w-wallet").value};
+  b.disabled=true;msg.className="reg-msg";msg.textContent="registering…";
+  try{const r=await fetch("/api/register-worker",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}).then(x=>x.json());
+    if(r.error){msg.className="reg-msg bad";msg.textContent=r.error;}
+    else{msg.className="reg-msg ok";msg.textContent="✓ "+r.name+" registered — the client can hire it now.";$("#w-name").value="";$("#w-wallet").value="";load();}
+  }catch(e){msg.className="reg-msg bad";msg.textContent=e.message;}
+  b.disabled=false;
+});
+load();setInterval(load,5000);`;
+  return shell({ title: "Vouch · Workers", active: "/workers", body, script });
 }
 
 export function agentPage(name) {
