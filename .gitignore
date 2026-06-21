@@ -13,3 +13,4 @@ agents.json
 dist/
 build/
 models/
+registry.json

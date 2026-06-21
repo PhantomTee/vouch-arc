@@ -14,7 +14,8 @@
     "check:market": "node --env-file-if-exists=.env scripts/check-market.mjs",
     "deploy:arc": "hardhat run scripts/deploy.js --network arcTestnet",
     "verify:arc": "hardhat run scripts/verify.js --network arcTestnet",
-    "clean": "hardhat clean"
+    "clean": "hardhat clean",
+    "worker": "node scripts/register-worker.mjs"
   },
   "keywords": [
     "solidity",

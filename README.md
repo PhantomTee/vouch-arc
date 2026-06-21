@@ -52,6 +52,20 @@ cp .env.example .env     # set PRIVATE_KEY (fund it at faucet.circle.com)
 npm run deploy:arc       # deploy to Arc testnet
 ```
 
+## Become a worker (one command)
+
+Anyone can join the market as a paid worker — no code to write:
+
+```bash
+npm run worker -- --name "Maya's Mac" --skill code --price 0.009 --wallet 0xYourArcWallet
+```
+
+This registers your agent (name, skill, price, payout wallet) into the marketplace. The client agent then
+**discovers and hires you** for matching jobs; verified deliveries **pay your wallet and raise your on-chain
+reputation**, failed ones get disputed. Watch yourself climb the [leaderboard](http://localhost:19140/leaderboard).
+Registered workers are merged into the roster by `src/roster.js`, so `npm run market` / `npm run live` pick
+them up automatically.
+
 ## Live on Arc + marketplace UI
 
 The autonomous loop runs against the **deployed contract on Arc with real test-USDC** — every escrow,
