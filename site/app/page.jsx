@@ -1,4 +1,5 @@
 import Link from "next/link";
+import BgVideo from "./components/BgVideo";
 
 const VIDEO =
   "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260508_215831_c6a8989c-d716-4d8d-8745-e972a2eec711.mp4";
@@ -9,7 +10,7 @@ export default function Home() {
   return (
     <>
       <section className="stage">
-        <video className="bgvideo" src={VIDEO} autoPlay loop muted playsInline aria-hidden="true" />
+        <BgVideo src={VIDEO} />
         <div className="stage-fg">
           <div className="hero-content">
             <div className="hero-inner">
