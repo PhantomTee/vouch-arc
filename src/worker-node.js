@@ -1,18 +1,23 @@
 // A REAL Vouch worker — a standalone program an operator runs on their own
 // machine. It exposes POST /deliver, so when the client hires it, the job is sent
 // here over HTTP, the work runs in THIS process, and the artifact is returned for
-// on-chain verification + payment. It announces itself to the coordinator
-// (outbound, no port-forwarding) and heartbeats while alive.
+// on-chain verification + payment. By default it joins the shared, always-on
+// network (vouch-coordinator.onrender.com) with zero setup — announcing itself
+// outbound (no port-forwarding) and heartbeating while alive.
 //
 //   node src/worker-node.js --name "Maya" --skill code --price 0.009 \
-//        --wallet 0xYourArcWallet --coordinator http://localhost:19160 --port 19171
+//        --wallet 0xYourArcWallet --port 19171
 //
-// --kind picks how it solves (honestCoder | buggyCoder | honestInference).
+// --coordinator points at a different (e.g. private) directory, or "off" to run
+// without joining any network at all. --kind picks how it solves
+// (honestCoder | buggyCoder | honestInference).
 
 import http from "node:http";
 import { ethers } from "ethers";
 import { buildAgentCard } from "./a2a.js";
 import { solvers } from "./agents.js";
+
+const DEFAULT_COORDINATOR_URL = "https://vouch-coordinator.onrender.com";
 
 function arg(name, fallback) {
   const i = process.argv.indexOf(`--${name}`);
@@ -25,7 +30,9 @@ const priceUsdc = Number(arg("price", skill === "inference" ? "0.011" : "0.009")
 const kind = arg("kind", skill === "inference" ? "honestInference" : "honestCoder");
 const port = Number(arg("port", "19171"));
 const host = arg("host", `http://localhost:${port}`);
-const coordinator = arg("coordinator", process.env.COORDINATOR_URL || "http://localhost:19160");
+const coordRaw = arg("coordinator", process.env.COORDINATOR_URL || DEFAULT_COORDINATOR_URL);
+const coordinatorOff = /^(off|none|0|false)$/i.test(coordRaw.trim());
+const coordinator = coordinatorOff ? null : coordRaw.replace(/\/$/, "");
 let wallet = arg("wallet", "");
 if (!wallet) {
   wallet = ethers.Wallet.createRandom().address;
@@ -109,6 +116,10 @@ async function announce(path) {
 server.listen(port, async () => {
   console.log(`\n${name} — ${skill} worker (${kind}) @ ${priceUsdc} USDC`);
   console.log(`  serving on ${host}  ·  payout ${wallet}`);
+  if (!coordinator) {
+    console.log(`  running solo (--coordinator off) — not joining any network`);
+    return;
+  }
   const ok = await announce("/register");
   console.log(ok ? `  ✓ registered with coordinator ${coordinator}` : `  ⚠ coordinator ${coordinator} unreachable (will retry)`);
   setInterval(() => announce("/heartbeat"), 10_000);

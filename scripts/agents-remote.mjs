@@ -3,12 +3,17 @@
 // the artifact that comes back, and pays or disputes — escrow + reputation steer
 // future jobs toward workers that actually deliver.
 //
-//   npm run coordinator                 # terminal 1
-//   npm run worker:serve -- --name ...  # terminals 2..n (the real workers)
+// By default this talks to the shared, always-on network (vouch-coordinator.
+// onrender.com) — no setup needed. Run your own with `npm run coordinator` and
+// pass --coordinator to use a private one instead.
+//
+//   npm run worker:serve -- --name ...  # terminals 1..n (the real workers)
 //   npm run remote -- --jobs 3          # this client  (add --live for on-chain Arc)
 
 import { ClientAgent, RemoteWorker } from "../src/agents.js";
 import { AgentRegistry } from "../src/registry.js";
+
+const DEFAULT_COORDINATOR_URL = "https://vouch-coordinator.onrender.com";
 
 function arg(name, fallback) {
   const i = process.argv.indexOf(`--${name}`);
@@ -16,7 +21,7 @@ function arg(name, fallback) {
 }
 const has = (f) => process.argv.includes(`--${f}`);
 
-const coordinator = arg("coordinator", process.env.COORDINATOR_URL || "http://localhost:19160");
+const coordinator = arg("coordinator", process.env.COORDINATOR_URL || DEFAULT_COORDINATOR_URL).replace(/\/$/, "");
 const jobs = Number(arg("jobs", "3"));
 const live = has("live");
 
