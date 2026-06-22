@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "A2A work marketplace: on-chain USDC escrow + reputation, on Circle Arc (Lepton Agents Hackathon, RFB 3)",
   "main": "index.js",
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "scripts": {
     "compile": "hardhat compile",
     "test": "hardhat test",

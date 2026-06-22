@@ -9,7 +9,9 @@
 
 import http from "node:http";
 
-const PORT = Number(process.env.COORDINATOR_PORT || 19160);
+// Render/Railway/Fly inject PORT for the platform's own routing; COORDINATOR_PORT
+// is the local-dev override so it doesn't collide with other Vouch services.
+const PORT = Number(process.env.PORT || process.env.COORDINATOR_PORT || 19160);
 const TTL_MS = 40_000; // a worker is "live" if seen within this window
 
 const workers = new Map(); // address -> { card, lastSeen }
