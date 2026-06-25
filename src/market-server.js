@@ -14,7 +14,7 @@ import { AgentRegistry } from "./registry.js";
 import { loadRoster, registerWorker } from "./roster.js";
 import { boardPage, leaderboardPage, feedPage, agentPage, workersPage, clientsPage } from "./pages.js";
 
-const PORT = Number(process.env.MARKET_PORT || 19140);
+const PORT = Number(process.env.PORT || process.env.MARKET_PORT || 19140);
 if (!process.env.PRIVATE_KEY || !process.env.ESCROW_ADDRESS) {
   console.error("Set PRIVATE_KEY and ESCROW_ADDRESS in .env first.");
   process.exit(1);

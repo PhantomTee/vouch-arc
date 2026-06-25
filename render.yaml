@@ -9,3 +9,21 @@ services:
     envVars:
       - key: NODE_VERSION
         value: 22.5.0
+
+  # Public, click-through demo: board / leaderboard / feed / workers / post-job.
+  # No wallet needed to visit — it holds its own demo client wallet server-side
+  # and settles real test-USDC on Arc on every action.
+  - type: web
+    name: vouch-market
+    runtime: node
+    plan: free
+    buildCommand: npm install --omit=dev
+    startCommand: node src/market-server.js
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: 22.5.0
+      - key: PRIVATE_KEY
+        sync: false
+      - key: ESCROW_ADDRESS
+        sync: false
