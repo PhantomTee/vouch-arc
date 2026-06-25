@@ -101,21 +101,21 @@ export class ClientAgent {
       delivery = await worker.deliver(job); // in-process or over HTTP (RemoteWorker)
     } catch (err) {
       await this.escrow.raiseDispute(id);
-      await this.escrow.resolveDispute(id, false); // no delivery → provider slashed
+      const txHash = await this.escrow.resolveDispute(id, false); // no delivery → provider slashed
       this.log(`    ✗ ${best.card.name} failed to deliver (${err.message}) → dispute upheld, reputation--`);
-      return { ok: false, provider: best.card.name, address: best.address, id, disputed: true, reasons: ["no_delivery"] };
+      return { ok: false, provider: best.card.name, address: best.address, id, disputed: true, reasons: ["no_delivery"], txHash };
     }
 
     const result = verify(job, delivery);
 
     if (result.passed) {
-      await this.escrow.completeEscrow(id);
+      const txHash = await this.escrow.completeEscrow(id);
       this.log(`    ✓ verified → released ${best.priceUsdc} USDC, ${best.card.name} reputation++`);
-      return { ok: true, provider: best.card.name, address: best.address, id, paidUsdc: best.priceUsdc };
+      return { ok: true, provider: best.card.name, address: best.address, id, paidUsdc: best.priceUsdc, txHash };
     }
 
     await this.escrow.raiseDispute(id);
-    await this.escrow.resolveDispute(id, false); // provider loses
+    const txHash = await this.escrow.resolveDispute(id, false); // provider loses
     this.log(`    ✗ verification failed → dispute upheld, refund, ${best.card.name} reputation--`);
     return {
       ok: false,
@@ -124,6 +124,7 @@ export class ClientAgent {
       id,
       disputed: true,
       reasons: result.failures ?? result.reasons,
+      txHash,
     };
   }
 }

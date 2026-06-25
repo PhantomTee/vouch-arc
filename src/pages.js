@@ -79,7 +79,7 @@ function shell({ title, active, body, script }) {
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet"/>
 <style>${SHELL_CSS}</style></head>
 <body><div class="wrap">
-<nav><span class="brand">VOUCH</span><span class="links">${link("/", "Board")}${link("/workers", "Workers")}${link("/leaderboard", "Leaderboard")}${link("/feed", "Feed")}</span></nav>
+<nav><span class="brand">VOUCH</span><span class="links">${link("/", "Board")}${link("/clients", "Post a job")}${link("/workers", "Workers")}${link("/leaderboard", "Leaderboard")}${link("/feed", "Feed")}</span></nav>
 ${body}
 <footer>agents hiring agents · escrow + reputation on <a href="https://testnet.arcscan.app" target="_blank" rel="noreferrer">Arc</a></footer>
 </div><script>
@@ -250,6 +250,19 @@ async function moveTo(name){const p=$("#packet");const x=center(name)-11;if(redu
   await p.animate([{left:p.style.left||"0px",opacity:1},{left:x+"px",opacity:1}],{duration:520,easing:"cubic-bezier(.6,.05,.3,1)",fill:"forwards"}).finished;}
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 
+// On-chain settlement can take a couple minutes on a flaky public RPC — too long
+// for one HTTP request to stay open reliably, so the server hands back a token
+// immediately and we poll for the result instead.
+async function pollJob(token){
+  for(let i=0;i<160;i++){
+    let s;try{s=await fetch("/api/job-status?token="+encodeURIComponent(token)).then(x=>x.json());}catch(e){s=null;}
+    if(s&&s.status==="done")return s.result;
+    if(s&&s.status==="error")return {error:s.error};
+    await wait(2500);
+  }
+  return {error:"timed out waiting for settlement"};
+}
+
 async function runJob(){
   const b=$("#run");if(b.disabled)return;b.disabled=true;resetRail();
   const p=$("#packet");p.style.left=(center("client")-11)+"px";p.style.opacity=reduce?1:0;
@@ -258,7 +271,7 @@ async function runJob(){
   await moveTo("escrow");setStation("escrow","lit","USDC locked");
   await moveTo("worker");setStation("worker","lit","delivering");
   await moveTo("verify");setStation("verify","lit","checking…");$("#status").textContent="agent verifying delivery on-chain…";
-  let r;try{r=await fetch("/api/run",{method:"POST"}).then(x=>x.json());}catch(e){r={error:e.message};}
+  let r;try{const{token}=await fetch("/api/run",{method:"POST"}).then(x=>x.json());r=await pollJob(token);}catch(e){r={error:e.message};}
   if(r.error){setStation("verify","bad","error");$("#status").textContent=r.error;b.disabled=false;return;}
   if(r.ok){setStation("verify","lit","passed");await moveTo("settle");setStation("settle","lit","paid "+r.paidUsdc+" USDC");
     const bar=$("#repbar");bar.style.width="100%";setTimeout(()=>bar.style.width="30%",900);
@@ -377,6 +390,73 @@ $("#w-go").addEventListener("click",async()=>{
 });
 load();setInterval(load,5000);`;
   return shell({ title: "Vouch · Workers", active: "/workers", body, script });
+}
+
+export function clientsPage() {
+  const body = `
+<h1>Post a job</h1>
+<p class="lead">Describe what you need, lock a budget, and the market does the rest — discover a worker, escrow the USDC, verify the delivery, and pay or dispute. No code required.</p>
+<div class="panel">
+  <h2>New job</h2>
+  <div class="reg" id="j-top" style="grid-template-columns:1.3fr 1fr .8fr auto">
+    <input id="j-title" placeholder='Job title (e.g. "add my invoice totals")' maxlength="80"/>
+    <select id="j-kind">
+      <option value="code">Code — add two numbers</option>
+      <option value="inference">Inference — ask a question</option>
+    </select>
+    <input id="j-budget" type="number" step="0.001" min="0" placeholder="budget USDC" value="0.02"/>
+    <button class="btn" id="j-go">Post job</button>
+  </div>
+  <div class="reg" id="j-code-fields" style="grid-template-columns:1fr 1fr">
+    <input id="j-a" type="number" placeholder="first number" value="2"/>
+    <input id="j-b" type="number" placeholder="second number" value="3"/>
+  </div>
+  <div class="reg" id="j-inf-fields" style="grid-template-columns:1fr;display:none">
+    <input id="j-prompt" placeholder="What do you want to ask the worker?" maxlength="500"/>
+  </div>
+  <div class="reg-msg" id="j-msg">Your USDC only moves once the work is verified — a failed delivery refunds you and docks the worker's reputation.</div>
+  <div id="j-result"></div>
+</div>
+<div class="panel"><h2>Why only "add two numbers" for code, right now</h2>
+  <div class="reg-msg" style="padding:16px 18px">Every worker on the market today — built-in or a real remote process — solves the same demo task, so that's the only code
+  job that can be verified honestly. Plug in your own worker (<code style="color:var(--ink);background:#0c1612;padding:1px 6px;border-radius:6px">npm run worker:serve</code>)
+  with real logic, and any job kind it actually implements becomes postable here next.</div>
+</div>`;
+  const script = `
+$("#j-kind").addEventListener("change",()=>{
+  const inf=$("#j-kind").value==="inference";
+  $("#j-code-fields").style.display=inf?"none":"";
+  $("#j-inf-fields").style.display=inf?"":"none";
+});
+async function pollJob(token){
+  for(let i=0;i<160;i++){
+    let s;try{s=await fetch("/api/job-status?token="+encodeURIComponent(token)).then(x=>x.json());}catch(e){s=null;}
+    if(s&&s.status==="done")return s.result;
+    if(s&&s.status==="error")return {error:s.error};
+    await new Promise(r=>setTimeout(r,2500));
+  }
+  return {error:"timed out waiting for settlement"};
+}
+$("#j-go").addEventListener("click",async()=>{
+  const b=$("#j-go"),msg=$("#j-msg"),res=$("#j-result");
+  const kind=$("#j-kind").value;
+  const body={kind,title:$("#j-title").value,budgetUsdc:$("#j-budget").value};
+  if(kind==="inference")body.prompt=$("#j-prompt").value;else{body.a=$("#j-a").value;body.b=$("#j-b").value;}
+  b.disabled=true;msg.className="reg-msg";msg.textContent="posting job — discovering a worker, escrowing your budget…";res.innerHTML="";
+  try{
+    const start=await fetch("/api/post-job",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}).then(x=>x.json());
+    const r=start.token?await pollJob(start.token):start;
+    if(r.error){msg.className="reg-msg bad";msg.textContent=r.error;}
+    else{
+      msg.className="reg-msg";msg.textContent="";
+      const tx=r.txHash?'<a class="tx" href="'+EXP+'/tx/'+r.txHash+'" target="_blank">view on Arcscan ↗</a>':'';
+      if(r.ok){res.innerHTML='<div class="reg-msg ok">✓ verified — '+(r.paidUsdc??"")+' USDC paid to '+(r.provider||"the worker")+'. '+tx+'</div>';}
+      else{res.innerHTML='<div class="reg-msg bad">✗ '+(r.disputed?"verification failed — disputed, you were refunded.":(r.reason==="no_provider"?"no worker available for this job/budget right now.":"job failed."))+' '+tx+'</div>';}
+    }
+  }catch(e){msg.className="reg-msg bad";msg.textContent=e.message;}
+  b.disabled=false;
+});`;
+  return shell({ title: "Vouch · Post a job", active: "/clients", body, script });
 }
 
 export function agentPage(name) {

@@ -12,7 +12,7 @@ import { Market } from "./chain.js";
 import { WorkerAgent, ClientAgent, solvers } from "./agents.js";
 import { AgentRegistry } from "./registry.js";
 import { loadRoster, registerWorker } from "./roster.js";
-import { boardPage, leaderboardPage, feedPage, agentPage, workersPage } from "./pages.js";
+import { boardPage, leaderboardPage, feedPage, agentPage, workersPage, clientsPage } from "./pages.js";
 
 const PORT = Number(process.env.MARKET_PORT || 19140);
 if (!process.env.PRIVATE_KEY || !process.env.ESCROW_ADDRESS) {
@@ -60,15 +60,33 @@ const inferenceJob = () => ({
 
 let running = false;
 let nextInference = false;
-async function runJob() {
-  if (running) return { error: "a job is already running" };
+
+// On-chain settlement can take minutes on a flaky public RPC — too long to hold
+// a single HTTP request open (intermediary proxies/browsers time those out well
+// before Node does). So job-running endpoints return a token immediately and the
+// page polls /api/job-status for the result, the same pull pattern Joule's
+// browser-extension nodes use for the same reason.
+const pending = new Map();
+function startAsync(work) {
+  const token = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  pending.set(token, { status: "running" });
+  work()
+    .then((result) => pending.set(token, { status: "done", result }))
+    .catch((e) => pending.set(token, { status: "error", error: e.message }));
+  // Forget tokens after a while so this map can't grow unbounded.
+  setTimeout(() => pending.delete(token), 10 * 60 * 1000);
+  return token;
+}
+
+// Shared by the demo "Run a job" button and the real "Post a job" form: open
+// escrow for `job`, let the market discover + hire a worker, verify the
+// delivery, and pay or dispute — then record the outcome for the feed/board.
+async function runAndRecord(job, { maxPriceUsdc = Infinity } = {}) {
+  if (running) return { error: "a job is already running — try again in a few seconds" };
   running = true;
   try {
-    await market.ensureApproval(0.2);
-    const useInference = nextInference;
-    nextInference = !nextInference;
-    const job = useInference ? inferenceJob() : codeJob;
-    const result = await client.runJob(job, { skill: job.kind, deadlineSecs: 3600 });
+    await market.ensureApproval(Math.max(maxPriceUsdc, 0.2));
+    const result = await client.runJob(job, { skill: job.kind, maxPriceUsdc, deadlineSecs: 3600 });
     if (result.id !== undefined) {
       const id = String(result.id);
       jobMeta[id] = {
@@ -89,6 +107,38 @@ async function runJob() {
   } finally {
     running = false;
   }
+}
+
+function runJob() {
+  const useInference = nextInference;
+  nextInference = !nextInference;
+  const job = useInference ? inferenceJob() : codeJob;
+  return { token: startAsync(() => runAndRecord(job)) };
+}
+
+// A real client-posted job. Code jobs stay restricted to addition because
+// that's the one task every registered solver (built-in or remote) actually
+// implements today — see src/agents.js's `solvers`. Anything else would
+// "verify" against work no worker can really do. Inference jobs accept any
+// prompt; the pass/fail proof is the system's existing known-answer challenge,
+// not a judgment of answer quality.
+function postJob({ kind, title, budgetUsdc, a, b, prompt }) {
+  const budget = Number(budgetUsdc);
+  if (!(budget > 0)) return { error: "Budget must be greater than 0." };
+  const cleanTitle = String(title || "").trim().slice(0, 80);
+  if (!cleanTitle) return { error: "Give the job a short title." };
+
+  let job;
+  if (kind === "inference") {
+    const cleanPrompt = String(prompt || "").trim().slice(0, 500);
+    if (!cleanPrompt) return { error: "Enter a prompt for the worker to answer." };
+    job = { ...inferenceJob(), title: cleanTitle, prompt: cleanPrompt };
+  } else {
+    const na = Number(a), nb = Number(b);
+    if (!Number.isFinite(na) || !Number.isFinite(nb)) return { error: "Enter two numbers to add." };
+    job = { title: cleanTitle, kind: "code", spec: { cases: [{ args: [na, nb], expected: na + nb }] } };
+  }
+  return { token: startAsync(() => runAndRecord(job, { maxPriceUsdc: budget })) };
 }
 
 // Cache terminal escrows to limit RPC load against the flaky public node.
@@ -222,12 +272,19 @@ function readBody(req) {
 }
 
 function html(res, body) {
+  if (res.headersSent) return;
   res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
   res.end(body);
 }
+// Escrow ids come back from ethers as BigInt (e.g. result.id from createEscrow);
+// JSON.stringify throws on those. Stringify BEFORE writeHead so a throw here
+// surfaces as a normal 500 instead of hanging a connection with headers already
+// sent and no body ever written.
 function json(res, status, obj) {
+  if (res.headersSent) return;
+  const body = JSON.stringify(obj, (_k, v) => (typeof v === "bigint" ? v.toString() : v));
   res.writeHead(status, { "Content-Type": "application/json" });
-  res.end(JSON.stringify(obj));
+  res.end(body);
 }
 
 const server = http.createServer(async (req, res) => {
@@ -238,9 +295,15 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && p === "/leaderboard") return html(res, leaderboardPage());
     if (req.method === "GET" && p === "/feed") return html(res, feedPage());
     if (req.method === "GET" && p === "/workers") return html(res, workersPage());
+    if (req.method === "GET" && p === "/clients") return html(res, clientsPage());
     if (req.method === "GET" && p === "/agent") return html(res, agentPage(url.searchParams.get("name") || ""));
     if (req.method === "GET" && p === "/api/state") return json(res, 200, await buildState());
-    if (req.method === "POST" && p === "/api/run") return json(res, 200, await runJob());
+    if (req.method === "GET" && p === "/api/job-status") {
+      const token = url.searchParams.get("token") || "";
+      return json(res, 200, pending.get(token) || { status: "error", error: "unknown or expired token" });
+    }
+    if (req.method === "POST" && p === "/api/run") return json(res, 200, runJob());
+    if (req.method === "POST" && p === "/api/post-job") return json(res, 200, postJob(await readBody(req)));
     if (req.method === "POST" && p === "/api/register-worker") {
       const body = await readBody(req);
       const name = String(body.name || "").trim();
@@ -260,5 +323,11 @@ const server = http.createServer(async (req, res) => {
     json(res, 500, { error: e.message });
   }
 });
+
+// On-chain jobs (createEscrow + completeEscrow, sometimes with RPC retries) can
+// run past Node's default 60s headersTimeout — disable it so a slow real
+// settlement doesn't get cut off mid-flight.
+server.headersTimeout = 0;
+server.requestTimeout = 0;
 
 server.listen(PORT, () => console.log(`Work-market UI on http://localhost:${PORT}  (escrow ${process.env.ESCROW_ADDRESS})`));
