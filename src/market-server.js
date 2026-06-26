@@ -16,7 +16,7 @@ import { boardPage, leaderboardPage, feedPage, agentPage, workersPage, clientsPa
 
 const PORT = Number(process.env.PORT || process.env.MARKET_PORT || 19140);
 if (!process.env.PRIVATE_KEY || !process.env.ESCROW_ADDRESS) {
-  console.error("Set PRIVATE_KEY and ESCROW_ADDRESS in .env first.");
+  console.error("Set PRIVATE_KEY and ESCROW_ADDRESS first (.env locally, or as env vars on your host).");
   process.exit(1);
 }
 
