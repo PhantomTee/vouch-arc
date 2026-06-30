@@ -13,6 +13,10 @@ import { WorkerAgent, ClientAgent, solvers } from "./agents.js";
 import { AgentRegistry } from "./registry.js";
 import { loadRoster, registerWorker } from "./roster.js";
 import { boardPage, leaderboardPage, feedPage, agentPage, workersPage, clientsPage } from "./pages.js";
+import { logger } from "./logger.js";
+import { metricsText, inc, observe } from "./metrics.js";
+import { archiveJob, readDisputes } from "./arbitration.js";
+import { buildAgentCard } from "./a2a.js";
 
 const PORT = Number(process.env.PORT || process.env.MARKET_PORT || 19140);
 if (!process.env.PRIVATE_KEY || !process.env.ESCROW_ADDRESS) {
@@ -84,9 +88,18 @@ function startAsync(work) {
 async function runAndRecord(job, { maxPriceUsdc = Infinity } = {}) {
   if (running) return { error: "a job is already running — try again in a few seconds" };
   running = true;
+  const t0 = Date.now();
+  inc("vouch_escrows_created_total");
   try {
     await market.ensureApproval(Math.max(maxPriceUsdc, 0.2));
     const result = await client.runJob(job, { skill: job.kind, maxPriceUsdc, deadlineSecs: 3600 });
+    const durationMs = Date.now() - t0;
+    observe("vouch_job_duration_seconds", durationMs / 1000);
+    if (result.ok) {
+      inc("vouch_escrows_settled_total");
+    } else {
+      inc("vouch_disputes_raised_total");
+    }
     if (result.id !== undefined) {
       const id = String(result.id);
       jobMeta[id] = {
@@ -95,14 +108,18 @@ async function runAndRecord(job, { maxPriceUsdc = Infinity } = {}) {
         providerName: result.provider,
         providerAddr: result.address,
         outcome: result.ok ? "paid" : "disputed",
-        amountUsdc: jobMeta[id]?.amountUsdc, // filled from chain on read
+        amountUsdc: jobMeta[id]?.amountUsdc,
         ts: new Date().toISOString(),
         txHash: result.txHash ?? null,
+        durationMs,
       };
       saveJobs();
+      archiveJob({ id, ...jobMeta[id] }).catch(() => {});
     }
+    logger.info(result.ok ? "job settled" : "job disputed", { title: job.title, durationMs });
     return result;
   } catch (e) {
+    logger.error("job error", { title: job.title, err: e.message });
     return { error: e.message };
   } finally {
     running = false;
@@ -317,6 +334,77 @@ const server = http.createServer(async (req, res) => {
       registerWorker({ name, address: wallet, skill, priceUsdc: price, kind, bio: "registered via UI" });
       buildWorkers();
       return json(res, 200, { ok: true, name });
+    }
+    // Prometheus metrics
+    if (req.method === "GET" && p === "/metrics") {
+      if (res.headersSent) return;
+      res.writeHead(200, { "Content-Type": "text/plain; version=0.0.4; charset=utf-8" });
+      return res.end(metricsText());
+    }
+    // A2A well-known agent card
+    if (req.method === "GET" && p === "/.well-known/agent-card.json") {
+      let marketAddress;
+      try { marketAddress = new ethers.Wallet(process.env.PRIVATE_KEY).address; } catch { marketAddress = process.env.ESCROW_ADDRESS; }
+      const card = buildAgentCard({
+        name: "Vouch Marketplace",
+        description: "A2A work marketplace with on-chain USDC escrow and reputation on Arc.",
+        url: `http://localhost:${PORT}`,
+        address: marketAddress,
+        skills: [
+          { id: "code",      name: "Code",      description: "Code generation and execution",  tags: ["programming"] },
+          { id: "inference", name: "Inference", description: "LLM inference tasks",             tags: ["ai", "llm"] },
+        ],
+        priceUsdc: 0.01,
+        agentType: "marketplace",
+        availabilityStatus: running ? "busy" : "available",
+        discoveryEndpoint: `http://localhost:${PORT}/api/agents/discover`,
+      });
+      if (res.headersSent) return;
+      res.writeHead(200, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify(card));
+    }
+    // Agent discovery API
+    if (req.method === "GET" && p === "/api/agents/discover") {
+      const skill         = url.searchParams.get("skill") || null;
+      const maxPrice      = parseFloat(url.searchParams.get("maxPrice") ?? "") || Infinity;
+      const minReputation = parseFloat(url.searchParams.get("minReputation") ?? "") || 0;
+      const limit         = Math.min(parseInt(url.searchParams.get("limit") ?? "20", 10), 100);
+      const state = await buildState();
+      let matching = state.agents;
+      if (skill)            matching = matching.filter((a) => a.skill === skill);
+      if (maxPrice < Infinity) matching = matching.filter((a) => (a.priceUsdc ?? 0) <= maxPrice);
+      if (minReputation > 0)   matching = matching.filter((a) => Number(a.reputation) >= minReputation);
+      return json(res, 200, { agents: matching.slice(0, limit), total: matching.length });
+    }
+    // Marketplace summary
+    if (req.method === "GET" && p === "/api/marketplace") {
+      const state = await buildState();
+      return json(res, 200, { ...state.summary, agents: state.agents.length, escrow: state.escrow });
+    }
+    // Disputes dashboard
+    if (req.method === "GET" && p === "/disputes") {
+      const disputes = await readDisputes(50);
+      const rows = disputes
+        .map((d) => `<tr><td>${d.ts}</td><td>${d.resolution ?? "—"}</td><td>${d.reason ?? "—"}</td><td>${d.jobId ?? d.id ?? "—"}</td></tr>`)
+        .join("");
+      const page = `<!doctype html><html><head><title>Disputes — Vouch</title>
+<style>body{font-family:monospace;background:#0d1412;color:#c8d8d4;padding:2em}
+a{color:#3FE0A8}table{border-collapse:collapse;width:100%}
+th,td{border:1px solid #1e2a27;padding:8px 12px;text-align:left}
+th{background:#1a2420}h1{color:#3FE0A8}</style></head>
+<body><h1>Disputes</h1><p><a href="/">← back</a></p>
+<table><thead><tr><th>Time</th><th>Resolution</th><th>Reason</th><th>Job ID</th></tr></thead>
+<tbody>${rows || '<tr><td colspan="4" style="color:#666">No disputes recorded.</td></tr>'}</tbody>
+</table></body></html>`;
+      return html(res, page);
+    }
+    // Archive a job
+    if (req.method === "POST" && p.startsWith("/api/jobs/") && p.endsWith("/archive")) {
+      const id = p.slice("/api/jobs/".length, -"/archive".length);
+      const meta = jobMeta[id];
+      if (!meta) return json(res, 404, { error: "job not found" });
+      const entry = await archiveJob({ id, ...meta });
+      return json(res, 200, { ok: true, entry });
     }
     json(res, 404, { error: "not_found" });
   } catch (e) {
