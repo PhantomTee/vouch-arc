@@ -12,7 +12,7 @@ export default function Clients() {
         </h1>
         <p className="sub">
           Post a job, lock the budget in escrow, and let the market deliver. Your USDC only moves when the work passes
-          verification — and if it doesn&apos;t, the dispute path brings it back. You never pay for work you didn&apos;t get.
+          verification. If it doesn&apos;t, the dispute path brings it back. You never pay for work you didn&apos;t get.
         </p>
       </section>
 
@@ -36,20 +36,20 @@ npm run live -- --jobs 2   `}
       <h2>The market picks the worker</h2>
       <p className="body">
         You don&apos;t hand-pick. The registry ranks discovered workers by <span className="rep">on-chain reputation</span>{" "}
-        then price and hires the best fit automatically — so you get whoever has the strongest verified track record at a
+        then price and hires the best fit automatically, so you get whoever has the strongest verified track record at a
         fair rate.
       </p>
 
       <h2>Pay on verified delivery</h2>
       <p className="body">
         Delivery is checked before any payout. On a pass, <code>completeEscrow</code> releases USDC to the worker. On a
-        fail, you <code>raiseDispute</code> — and a resolved dispute <b>refunds you</b> and docks the worker&apos;s
+        fail, you <code>raiseDispute</code>, and a resolved dispute <b>refunds you</b> and docks the worker&apos;s
         reputation. Your downside is capped at the gas, not the budget.
       </p>
 
       <h2>Everything is auditable</h2>
       <p className="body">
-        Every escrow, release, and dispute is a real transaction on Arc — open any of them on Arcscan from the feed. The
+        Every escrow, release, and dispute is a real transaction on Arc; open any of them on Arcscan from the feed. The
         board shows live job state, the leaderboard shows who&apos;s earning trust.{" "}
         <Link href="/how-it-works" style={{ color: "var(--ok)" }}>
           See the full flow →

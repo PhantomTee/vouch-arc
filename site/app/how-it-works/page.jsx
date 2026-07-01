@@ -11,7 +11,7 @@ export default function HowItWorks() {
           Money moves <span className="g">only on proof</span>.
         </h1>
         <p className="sub">
-          No invoices, no trust falls. A job&apos;s USDC sits locked in the contract until the delivery is verified — then
+          No invoices, no trust falls. A job&apos;s USDC sits locked in the contract until the delivery is verified, then
           it releases atomically, or the dispute path refunds the client. Every step is on-chain.
         </p>
       </section>
@@ -36,7 +36,7 @@ export default function HowItWorks() {
       <h2>1 · Post + escrow</h2>
       <p className="body">
         A client agent calls <code>createEscrow(worker, amount, deadline)</code> and the USDC is transferred into the
-        contract — held, not sent. The worker can see the funds are real and committed before lifting a finger, so there&apos;s
+        contract, held, not sent. The worker can see the funds are real and committed before lifting a finger, so there&apos;s
         no &quot;will I actually get paid?&quot; risk.
       </p>
 
@@ -58,7 +58,7 @@ export default function HowItWorks() {
       <h2>The contract</h2>
       <p className="body">
         It&apos;s an original <b>WorkEscrow</b> (Solidity 0.8, ReentrancyGuard + SafeERC20) deployed on Arc testnet with
-        real test-USDC — every escrow, release, and dispute is a real transaction you can open on Arcscan.
+        real test-USDC. Every escrow, release, and dispute is a real transaction you can open on Arcscan.
       </p>
       <pre>
         <code>

@@ -1,12 +1,13 @@
 import Link from "next/link";
+import Gauge from "../components/Gauge";
 
 export const metadata = { title: "Vouch · reputation" };
 
 const board = [
-  ["Ada", "honest coder", "+2", "up", "2 delivered · 0 lost"],
-  ["Maya's Mac", "operator-registered", "+1", "up", "1 delivered · 0 lost"],
-  ["Lex", "inference", "0", "", "new to the market"],
-  ["Bender", "cuts corners", "−1", "down", "0 delivered · 1 lost"],
+  ["Ada", "honest coder", 2, "2 delivered · 0 lost"],
+  ["Maya's Mac", "operator-registered", 1, "1 delivered · 0 lost"],
+  ["Lex", "inference", 0, "new to the market"],
+  ["Bender", "cuts corners", -1, "0 delivered · 1 lost"],
 ];
 
 export default function Reputation() {
@@ -19,7 +20,7 @@ export default function Reputation() {
         </h1>
         <p className="sub">
           Every outcome writes to the contract: a verified delivery is +1, a lost dispute is −1. It&apos;s not a star
-          rating anyone can game — it&apos;s a tamper-proof track record that decides who gets hired next.
+          rating anyone can game; it&apos;s a tamper-proof track record that decides who gets hired next.
         </p>
       </section>
 
@@ -50,7 +51,7 @@ export default function Reputation() {
       <h2>Discovery routes work to the proven</h2>
       <p className="body">
         When a client looks for a worker, the registry ranks candidates by <span className="rep">reputation</span> first,
-        then price. So a strong record compounds into more jobs — and a bad one prices you out. The incentive is simple:{" "}
+        then price. So a strong record compounds into more jobs, and a bad one prices you out. The incentive is simple:{" "}
         <b>deliver, or don&apos;t get hired</b>.
       </p>
 
@@ -69,9 +70,9 @@ export default function Reputation() {
               <td className="f">{r[0]}</td>
               <td>{r[1]}</td>
               <td>
-                <span className={`badge ${r[3] || ""}`}>{r[2]}</span>
+                <Gauge score={r[2]} max={3} />
               </td>
-              <td>{r[4]}</td>
+              <td>{r[3]}</td>
             </tr>
           ))}
         </tbody>
