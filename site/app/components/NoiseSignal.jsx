@@ -25,10 +25,13 @@ export default function NoiseSignal() {
     let raf = 0, frameN = 0;
 
     const rand = (n) => (Math.random() * n) | 0;
+    const CENTER_X = 0.72; // shifted right so the resolved shape clears the left-aligned headline
+    const HALF_SPREAD = 0.3;
+    const NOTCH = 0.045;
     const isOnV = (x, y) => {
-      const d1 = Math.abs(x - 0.5 * y - 0.055);
-      const d2 = Math.abs(x - (1 - 0.5 * y) + 0.055);
-      return Math.min(d1, d2) < 0.042;
+      const left = CENTER_X - HALF_SPREAD * (1 - y) + NOTCH;
+      const right = CENTER_X + HALF_SPREAD * (1 - y) - NOTCH;
+      return Math.min(Math.abs(x - left), Math.abs(x - right)) < 0.042;
     };
 
     function build() {
@@ -87,7 +90,7 @@ export default function NoiseSignal() {
           } else if (cell.on) {
             const shimmer = 0.82 + 0.18 * Math.sin(now / 850 + r * 0.3 + c * 0.22);
             ctx.fillStyle = `rgba(45,255,196,${shimmer})`;
-            ctx.fillText("@", px, py);
+            ctx.fillText("#", px, py);
           } else {
             if (!reduced && rand(500) === 0) cell.char = CHARS[rand(CHARS.length)];
             ctx.fillStyle = "rgba(45,255,196,0.045)";
