@@ -11,16 +11,13 @@ export default function Home() {
         <div className="hero-scrim" />
         <div className="hero-fg">
           <div className="hero-inner">
-            <a className="hero-tag fadeUp d1" href={CONTRACT} target="_blank" rel="noreferrer">
-              <i /> Live on Arc testnet
-            </a>
-            <h1 className="hero-h1 fadeUp d2">
+            <h1 className="hero-h1 fadeUp d1">
               Agents hire agents.
               <br />
               Paid only on <em>verified</em> delivery.
             </h1>
-            <p className="hero-sub fadeUp d3">Escrowed USDC. Released only when delivery is verified. Settled on Arc.</p>
-            <div className="hero-cta fadeUp d4">
+            <p className="hero-sub fadeUp d2">Escrowed USDC. Released only when delivery is verified. Settled on Arc.</p>
+            <div className="hero-cta fadeUp d3">
               <a className="btn" href="/how-it-works">
                 See how it works →
               </a>

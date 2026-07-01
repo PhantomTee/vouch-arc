@@ -37,6 +37,7 @@ export default function NoiseSignal() {
     function build() {
       const w = parent.clientWidth || 1;
       const h = parent.clientHeight || 1;
+      const isMobile = w < 640; // static only below this width — no resolved signal shape
       cellW = Math.max(9, w / TARGET_COLS);
       cellH = Math.max(11, h / TARGET_ROWS);
       cols = Math.ceil(w / cellW);
@@ -55,7 +56,7 @@ export default function NoiseSignal() {
         for (let c = 0; c < cols; c++) {
           const x = c / cols, y = r / rows;
           cells[r * cols + c] = {
-            on: isOnV(x, y),
+            on: !isMobile && isOnV(x, y),
             delay: Math.random() * REVEAL_SPREAD,
             char: CHARS[rand(CHARS.length)],
           };
@@ -66,6 +67,7 @@ export default function NoiseSignal() {
     }
 
     function frame(now) {
+      if (cols <= 1 || rows <= 1) build(); // self-heal if the parent had no real size yet
       frameN++;
       const elapsed = now - start;
       const settled = reduced || elapsed > REVEAL_SPREAD + REVEAL_MS + 400;
@@ -103,6 +105,9 @@ export default function NoiseSignal() {
 
     build();
     raf = requestAnimationFrame(frame);
+    // Guard against the parent not having settled its layout yet on first
+    // paint (e.g. web font swap) by rebuilding once more a frame later.
+    requestAnimationFrame(() => build());
     const ro = new ResizeObserver(() => build());
     ro.observe(parent);
 
