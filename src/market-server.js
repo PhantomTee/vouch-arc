@@ -381,6 +381,67 @@ const server = http.createServer(async (req, res) => {
       const state = await buildState();
       return json(res, 200, { ...state.summary, agents: state.agents.length, escrow: state.escrow });
     }
+    // Aggregated job analytics across all recorded jobs
+    if (req.method === "GET" && p === "/api/analytics") {
+      const jobs = Object.values(jobMeta);
+      const paid     = jobs.filter((j) => j.outcome === "paid").length;
+      const disputed = jobs.filter((j) => j.outcome === "disputed").length;
+      const durations = jobs.map((j) => j.durationMs).filter(Boolean);
+      const avgDurationMs = durations.length
+        ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length)
+        : 0;
+      const byKind = {};
+      for (const j of jobs) byKind[j.kind || "unknown"] = (byKind[j.kind || "unknown"] || 0) + 1;
+
+      const state = await buildState();
+      const topEarners = state.agents
+        .filter((a) => a.earnedUsdc > 0)
+        .sort((a, b) => b.earnedUsdc - a.earnedUsdc)
+        .slice(0, 5)
+        .map((a) => ({ name: a.name, address: a.address, earnedUsdc: a.earnedUsdc, completed: a.completed }));
+
+      return json(res, 200, {
+        totalJobs: jobs.length,
+        paid,
+        disputed,
+        successRate: jobs.length > 0 ? Number((paid / jobs.length).toFixed(4)) : null,
+        avgDurationMs,
+        byKind,
+        topEarners,
+        escrowAddress: market.address,
+        generatedAt: new Date().toISOString(),
+      });
+    }
+    // Per-address reputation breakdown
+    if (req.method === "GET" && p.startsWith("/api/reputation/")) {
+      const address = p.slice("/api/reputation/".length).toLowerCase();
+      if (!ethers.isAddress(address)) return json(res, 400, { error: "invalid address" });
+
+      const score  = await market.reputationScore(address).catch(() => 0);
+      const worker = byAddr.get(address);
+
+      const history = Object.entries(jobMeta)
+        .filter(([, m]) => m.providerAddr?.toLowerCase() === address)
+        .map(([id, m]) => ({ id, ...m }))
+        .sort((a, b) => new Date(b.ts) - new Date(a.ts));
+
+      const delivered = history.filter((j) => j.outcome === "paid").length;
+      const totalJobs = history.length;
+
+      return json(res, 200, {
+        address,
+        name:         worker?.name ?? null,
+        skill:        worker?.skill ?? null,
+        priceUsdc:    worker?.priceUsdc ?? null,
+        onChainScore: Number(score),
+        delivered,
+        disputed:     totalJobs - delivered,
+        totalJobs,
+        successRate:  totalJobs > 0 ? Number((delivered / totalJobs).toFixed(4)) : null,
+        recentJobs:   history.slice(0, 10),
+        generatedAt:  new Date().toISOString(),
+      });
+    }
     // Disputes dashboard
     if (req.method === "GET" && p === "/disputes") {
       const disputes = await readDisputes(50);
